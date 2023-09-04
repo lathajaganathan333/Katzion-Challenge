@@ -1,0 +1,162 @@
+public with sharing class TransactionItemHandler {
+  private static Boolean transferSuccess=false ;
+  private static List<Transaction__c> sendTrnList = new List<Transaction__c>();   
+  public static void transactionItemCallout(List<Transaction_Item__c> newTrnItemRecords){
+     
+  //create a set to hold the Transaction Ids
+        Set<Id> TransactionIds = new Set<Id>();
+        Map<Id,Id> TlIdTrnIdMap= new Map<Id,Id>();
+       
+       
+        //add to the set  of Ids
+        for(Transaction_Item__c tl: newTrnItemRecords){
+            TransactionIds.add(tl.Transaction__c);
+            TlIdTrnIdMap.put(tl.Id,tl.Transaction__c);
+          }
+      Map<Id,Transaction__c> TrnMap= new Map<Id,Transaction__c>([select Id,Transaction_Count__c
+                                                                from Transaction__c where Id in :TransactionIds]);
+      
+      Map<Id,Transaction__c> TrnSendMap= new Map<Id,Transaction__c>([select Id,Transaction_Count__c,
+                                                                   Total_Cost__c,
+                                                                   Total_Discount__c,
+                                                                   CreatedDate
+                                                                   from Transaction__c where Id in :TransactionIds]);
+                //create a list to hold the count of Transaction items
+        List<AggregateResult> totalCount=[select Transaction__c trnId,count(Id) totalLine from Transaction_Item__c where 
+                                          Transaction__c in :TransactionIds
+                                         group by Transaction__c];
+        Map<Id,Integer> trnIdTotalLineMap= new Map<Id,Integer>();
+        
+        for(AggregateResult ar:totalCount){
+            trnIdTotalLineMap.put(String.valueof(ar.get('trnId')),Integer.valueof(ar.get('totalLine')));
+        }
+
+    List<Transaction_Item__c> sendTrnItemList = new List<Transaction_Item__c>();
+     
+                                                           
+        for(Transaction_Item__c ti :newTrnItemRecords){
+            if( trnIdTotalLineMap.get(ti.Transaction__c)==TrnMap.get(ti.Transaction__c).Transaction_Count__c){
+                sendTrnItemList.add(ti);
+                sendTrnList.add(TrnSendMap.get(ti.Transaction__c));
+            }
+            System.debug('sendTrnItemList is '+sendTrnItemList);
+            System.debug('sendTrnList is '+sendTrnList);
+            if(!sendTrnItemList.isEmpty()){
+                String TliItemPayload = createTliJson(sendTrnItemList);
+                tliCallout(TliItemPayload);
+                
+                generateTrnJson();
+               
+               
+            
+     
+            }
+              
+              
+            
+           
+        }                                         
+                                              
+    
+}
+    private static String createTliJson(List<Transaction_Item__c> tliItem){
+        List<TransactionItemJsonWrapper> createJsonList= new List<TransactionItemJsonWrapper>();
+        
+        for(Transaction_Item__c ti :tliItem){
+            createJsonList.add(createJson(ti));
+           
+        }
+      
+        return JSON.serialize(createJsonList);
+        
+    }
+     private static String createTrnJson(List<Transaction__c> trnList){
+        List<TransactionJsonWrapper> createTrnJsonList= new List<TransactionJsonWrapper>();
+        
+        for(Transaction__c tr :trnList){
+            createTrnJsonList.add(createTrnJson(tr));
+           
+        }
+      
+        return JSON.serialize(createTrnJsonList);
+        
+    }
+    
+    private static TransactionItemJsonWrapper createJson(Transaction_Item__c tli){
+                
+        
+            TransactionItemJsonWrapper tlPayLoad = new TransactionItemJsonWrapper();
+            tlPayLoad.keys= new TransactionItemKeys();
+            tlPayLoad.keys.TransactionItemID = tli.Id;
+            tlPayLoad.values= new TransactionItemValues();
+            tlPayLoad.values.ItemCost=tli.Item_Cost__c;
+            tlPayLoad.values.ItemName= tli.Name;
+            return tlPayLoad;
+       
+    }
+    private static TransactionJsonWrapper createTrnJson(Transaction__c trn){
+        TransactionJsonWrapper trnPayload = new TransactionJsonWrapper();
+        trnPayload.keys= new TransactionKeys();
+        trnPayload.keys.TransactionID= trn.Id;
+        trnPayload.values = new TransactionValues();
+        trnPayload.values.TotalCost =trn.Total_Cost__c;
+        trnPayload.values.TotalDiscount = trn.Total_Discount__c;
+        trnPayload.values.TransactionDate = trn.CreatedDate;
+        trnPayload.values.TotalCount = trn.Transaction_Count__c;
+        return trnPayload;
+    }
+    
+    @future(callout=true)
+    private static void tliCallout(String tliPayload){
+        Http http = new Http();
+        HttpRequest  request= new HttpRequest();
+        request.setEndpoint(' https://jsonplaceholder.typicode.com/posts');
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setBody(tliPayload);
+        HttpResponse response= http.send(request);
+        if(response.getStatusCode()==200 || response.getStatusCode()==201){
+            System.debug('Tl Call is successful !');
+            System.debug('Response Body: ' + response.getBody());
+           transferSuccess = true;
+            System.debug('transfer success is '+transferSuccess);
+            //generateTrnJson();
+             
+            
+        }else{
+            System.debug(tliPayload);
+            System.debug('Response Body: ' + response.getBody());
+        }
+    }
+     @future(callout=true)
+    public static void trnCallout(String trnPayload){
+        
+        Http httpTrn = new Http();
+        HttpRequest  requestTrn= new HttpRequest();
+        requestTrn.setEndpoint(' https://jsonplaceholder.typicode.com/posts');
+        requestTrn.setMethod('POST');
+        requestTrn.setHeader('Content-Type', 'application/json');
+        requestTrn.setBody(trnPayload);
+        
+        HttpResponse responseTrn= httpTrn.send(requestTrn);
+        
+        if(responseTrn.getStatusCode()==200 || responseTrn.getStatusCode()==201){
+            System.debug('Transaction Call is successful !!');
+            System.debug('Response Body: ' + responseTrn.getBody());
+            System.debug('trn body is '+trnPayload);
+        }else{
+            System.debug(trnPayload);
+            System.debug('Response Transaction Body: ' + responseTrn.getBody());
+        }
+        
+    }
+    
+    private static void generateTrnJson(){
+        
+            String TrnPayload = createTrnJson(sendTrnList);
+                trnCallout(TrnPayload);
+        
+                
+                
+    }
+}
