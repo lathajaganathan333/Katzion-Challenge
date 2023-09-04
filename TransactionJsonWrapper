@@ -1,0 +1,4 @@
+public class TransactionJsonWrapper {
+    public TransactionKeys keys{get;set;}
+    public TransactionValues values{get;set;}
+}
