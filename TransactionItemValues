@@ -1,0 +1,4 @@
+public class TransactionItemValues {
+public Decimal ItemCost { get; set; }
+public String ItemName { get; set; }
+}
