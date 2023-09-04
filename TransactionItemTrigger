@@ -1,0 +1,8 @@
+trigger TransactionItemTrigger on Transaction_Item__c (after insert) {
+    
+    if(Trigger.isAfter && Trigger.isInsert){
+      TransactionItemHandler.transactionItemCallout(Trigger.new);  
+     
+    }
+
+}
