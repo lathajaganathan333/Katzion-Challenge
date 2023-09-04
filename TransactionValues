@@ -1,0 +1,7 @@
+public class TransactionValues {
+    public Decimal TotalCost{get;set;}
+    public Decimal TotalDiscount{get;set;}
+    public DateTime TransactionDate{get;set;}
+    public Decimal TotalCount{get;set;}
+        
+}
