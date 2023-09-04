@@ -1,0 +1,3 @@
+public class TransactionKeys {
+    public String TransactionID {get;set;}
+}
